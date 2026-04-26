@@ -1,0 +1,166 @@
+```html
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DualView Pro - 高畫質雙錄</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background: #0f172a; font-family: sans-serif; }
+        .preview-box { border: 2px solid #334155; border-radius: 12px; overflow: hidden; background: #000; }
+        canvas { width: 100%; height: auto; display: block; }
+        .rec-active { border-color: #ef4444; box-shadow: 0 0 15px rgba(239, 68, 68, 0.5); }
+    </style>
+</head>
+<body class="text-slate-200 min-h-screen p-4 flex flex-col items-center">
+
+    <div class="max-w-xl w-full space-y-4">
+        <div class="text-center py-4">
+            <h1 class="text-3xl font-extrabold text-white tracking-tight">DualView <span class="text-blue-500">Pro</span></h1>
+            <p class="text-slate-400">已優化高位元率錄製與畫質平衡</p>
+        </div>
+
+        <!-- 橫式 (16:9) -->
+        <div class="space-y-1">
+            <div class="flex justify-between text-xs font-bold text-slate-500 uppercase px-1">
+                <span>Landscape 16:9 (Main)</span>
+                <span id="labelH">等待相機...</span>
+            </div>
+            <div id="boxH" class="preview-box">
+                <canvas id="canvasH"></canvas>
+            </div>
+        </div>
+
+        <!-- 直式 (9:16) -->
+        <div class="space-y-1">
+            <div class="flex justify-between text-xs font-bold text-slate-500 uppercase px-1">
+                <span>Vertical 9:16 (Center Crop)</span>
+                <span id="labelV">等待相機...</span>
+            </div>
+            <div id="boxV" class="preview-box mx-auto" style="width: 56.25%;">
+                <canvas id="canvasV"></canvas>
+            </div>
+        </div>
+
+        <!-- 隱藏的原始影片源 -->
+        <video id="vSource" autoplay playsinline muted class="hidden"></video>
+
+        <div class="grid grid-cols-1 gap-3 pt-4">
+            <button id="initBtn" class="bg-white text-black font-bold py-4 rounded-2xl shadow-lg hover:bg-slate-200 transition">
+                啟動高畫質相機
+            </button>
+            
+            <div class="flex gap-3">
+                <button id="startBtn" disabled class="flex-2 bg-blue-600 disabled:opacity-30 text-white font-bold py-4 px-8 rounded-2xl shadow-lg hover:bg-blue-700 transition">
+                    同步錄製
+                </button>
+                <button id="stopBtn" disabled class="flex-1 bg-slate-700 text-white font-bold py-4 rounded-2xl shadow-lg hover:bg-slate-600 transition">
+                    停止
+                </button>
+            </div>
+        </div>
+
+        <div id="dlSection" class="hidden grid grid-cols-2 gap-3 p-4 bg-slate-800/50 rounded-2xl border border-slate-700">
+            <a id="dlH" class="bg-emerald-600 hover:bg-emerald-500 p-3 rounded-xl text-center text-sm font-bold">下載 16:9</a>
+            <a id="dlV" class="bg-emerald-600 hover:bg-emerald-500 p-3 rounded-xl text-center text-sm font-bold">下載 9:16</a>
+        </div>
+    </div>
+
+    <script>
+        const vSource = document.getElementById('vSource');
+        const canvasH = document.getElementById('canvasH');
+        const canvasV = document.getElementById('canvasV');
+        const ctxH = canvasH.getContext('2d');
+        const ctxV = canvasV.getContext('2d');
+        
+        let recorderH, recorderV;
+        let chunksH = [], chunksV = [];
+        let isRecording = false;
+
+        async function initCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { 
+                        width: { ideal: 1920 }, 
+                        height: { ideal: 1080 },
+                        facingMode: "environment" 
+                    },
+                    audio: true
+                });
+                vSource.srcObject = stream;
+                vSource.onloadedmetadata = () => {
+                    canvasH.width = 1280; canvasH.height = 720;
+                    canvasV.width = 720; canvasV.height = 1280;
+                    drawLoop();
+                    document.getElementById('initBtn').style.display = 'none';
+                    document.getElementById('startBtn').disabled = false;
+                };
+            } catch (e) { alert("相機啟動失敗，請檢查權限或 HTTPS。"); }
+        }
+
+        function drawLoop() {
+            // 繪製橫式
+            ctxH.drawImage(vSource, 0, 0, canvasH.width, canvasH.height);
+            
+            // 繪製直式 (從橫向源中心裁切)
+            const sourceW = vSource.videoWidth;
+            const sourceH = vSource.videoHeight;
+            const cropW = sourceH * (9/16);
+            const startX = (sourceW - cropW) / 2;
+            ctxV.drawImage(vSource, startX, 0, cropW, sourceH, 0, 0, canvasV.width, canvasV.height);
+            
+            requestAnimationFrame(drawLoop);
+        }
+
+        document.getElementById('initBtn').onclick = initCamera;
+
+        document.getElementById('startBtn').onclick = () => {
+            chunksH = []; chunksV = [];
+            
+            // 設定高品質位元率 (5Mbps)
+            const options = { mimeType: 'video/webm;codecs=vp8,opus', videoBitsPerSecond: 5000000 };
+            
+            recorderH = new MediaRecorder(canvasH.captureStream(30), options);
+            recorderV = new MediaRecorder(canvasV.captureStream(30), options);
+            
+            recorderH.ondataavailable = e => chunksH.push(e.data);
+            recorderV.ondataavailable = e => chunksV.push(e.data);
+            
+            recorderH.onstop = () => setupDownload(chunksH, '16-9-video.webm', 'dlH');
+            recorderV.onstop = () => setupDownload(chunksV, '9-16-video.webm', 'dlV');
+            
+            recorderH.start(); recorderV.start();
+            
+            isRecording = true;
+            updateUI();
+        };
+
+        document.getElementById('stopBtn').onclick = () => {
+            recorderH.stop(); recorderV.stop();
+            isRecording = false;
+            updateUI();
+            document.getElementById('dlSection').classList.remove('hidden');
+        };
+
+        function setupDownload(chunks, name, id) {
+            const blob = new Blob(chunks, { type: 'video/webm' });
+            const url = URL.createObjectURL(blob);
+            const el = document.getElementById(id);
+            el.href = url;
+            el.download = name;
+        }
+
+        function updateUI() {
+            document.getElementById('startBtn').disabled = isRecording;
+            document.getElementById('stopBtn').disabled = !isRecording;
+            document.getElementById('boxH').className = isRecording ? 'preview-box rec-active' : 'preview-box';
+            document.getElementById('boxV').className = isRecording ? 'preview-box rec-active mx-auto' : 'preview-box mx-auto';
+            document.getElementById('labelH').innerText = isRecording ? '🔴 錄製中' : '準備就緒';
+            document.getElementById('labelV').innerText = isRecording ? '🔴 錄製中' : '準備就緒';
+        }
+    </script>
+</body>
+</html>
+
+```
