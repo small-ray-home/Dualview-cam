@@ -3,141 +3,222 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DualView Pro - 高畫質雙錄</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DualView Pro - 橫向排版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background: #0f172a; font-family: sans-serif; }
-        .preview-box { border: 2px solid #334155; border-radius: 12px; overflow: hidden; background: #000; }
-        canvas { width: 100%; height: auto; display: block; }
-        .rec-active { border-color: #ef4444; box-shadow: 0 0 15px rgba(239, 68, 68, 0.5); }
+        body { 
+            background: #020617; 
+            font-family: system-ui, -apple-system, sans-serif; 
+            margin: 0; 
+            overflow: hidden; 
+            height: 100vh;
+            width: 100vw;
+        }
+        .preview-container {
+            display: flex;
+            flex-direction: row;
+            height: 100vh;
+            width: 100vw;
+            padding: 10px;
+            gap: 15px;
+        }
+        .main-preview {
+            flex: 2;
+            background: #000;
+            border-radius: 16px;
+            border: 2px solid #1e293b;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        .side-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .sub-preview {
+            flex: 1.5;
+            background: #000;
+            border-radius: 16px;
+            border: 2px solid #1e293b;
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .controls {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+        canvas {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        .rec-active {
+            border-color: #ef4444 !important;
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+        }
+        .status-badge {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.6);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            z-index: 10;
+        }
+        #vSource { position: fixed; top: -9999px; }
     </style>
 </head>
-<body class="text-slate-200 min-h-screen p-4 flex flex-col items-center">
+<body class="text-white">
 
-    <div class="max-w-xl w-full space-y-4">
-        <div class="text-center py-4">
-            <h1 class="text-3xl font-extrabold text-white tracking-tight">DualView <span class="text-blue-500">Pro</span></h1>
-            <p class="text-slate-400">已優化高位元率錄製與畫質平衡</p>
-        </div>
-
-        <!-- 橫式 (16:9) -->
-        <div class="space-y-1">
-            <div class="flex justify-between text-xs font-bold text-slate-500 uppercase px-1">
-                <span>Landscape 16:9 (Main)</span>
-                <span id="labelH">等待相機...</span>
-            </div>
-            <div id="boxH" class="preview-box">
-                <canvas id="canvasH"></canvas>
+    <div class="preview-container">
+        <!-- 左側：橫式主畫面 -->
+        <div id="boxH" class="main-preview shadow-2xl">
+            <div class="status-badge text-blue-400">Landscape 16:9</div>
+            <canvas id="canvasH"></canvas>
+            <div id="recIndicatorH" class="hidden absolute top-3 right-3 flex items-center gap-2">
+                <span class="w-3 h-3 bg-red-600 rounded-full animate-pulse"></span>
+                <span class="text-xs font-bold text-red-500">REC</span>
             </div>
         </div>
 
-        <!-- 直式 (9:16) -->
-        <div class="space-y-1">
-            <div class="flex justify-between text-xs font-bold text-slate-500 uppercase px-1">
-                <span>Vertical 9:16 (Center Crop)</span>
-                <span id="labelV">等待相機...</span>
-            </div>
-            <div id="boxV" class="preview-box mx-auto" style="width: 56.25%;">
+        <!-- 右側：直式畫面與按鈕 -->
+        <div class="side-panel">
+            <div id="boxV" class="sub-preview shadow-xl">
+                <div class="status-badge text-purple-400">Vertical 9:16</div>
                 <canvas id="canvasV"></canvas>
             </div>
-        </div>
 
-        <!-- 隱藏的原始影片源 -->
-        <video id="vSource" autoplay playsinline muted class="hidden"></video>
+            <div class="controls">
+                <button id="initBtn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg transition active:scale-95">
+                    啟動相機
+                </button>
+                
+                <div id="recordGroup" class="hidden flex flex-col gap-2">
+                    <button id="startBtn" class="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-4 rounded-xl shadow-lg transition active:scale-95 flex items-center justify-center gap-2">
+                        <span>同步錄影</span>
+                    </button>
+                    <button id="stopBtn" disabled class="w-full bg-slate-700 disabled:opacity-50 text-white font-bold py-2 rounded-xl transition">
+                        停止
+                    </button>
+                </div>
 
-        <div class="grid grid-cols-1 gap-3 pt-4">
-            <button id="initBtn" class="bg-white text-black font-bold py-4 rounded-2xl shadow-lg hover:bg-slate-200 transition">
-                啟動高畫質相機
-            </button>
-            
-            <div class="flex gap-3">
-                <button id="startBtn" disabled class="flex-2 bg-blue-600 disabled:opacity-30 text-white font-bold py-4 px-8 rounded-2xl shadow-lg hover:bg-blue-700 transition">
-                    同步錄製
-                </button>
-                <button id="stopBtn" disabled class="flex-1 bg-slate-700 text-white font-bold py-4 rounded-2xl shadow-lg hover:bg-slate-600 transition">
-                    停止
-                </button>
+                <div id="dlSection" class="hidden grid grid-cols-2 gap-2 mt-2">
+                    <a id="dlH" class="bg-emerald-600 text-center py-2 rounded-lg text-[10px] font-bold">下載橫式</a>
+                    <a id="dlV" class="bg-emerald-600 text-center py-2 rounded-lg text-[10px] font-bold">下載直式</a>
+                </div>
             </div>
         </div>
-
-        <div id="dlSection" class="hidden grid grid-cols-2 gap-3 p-4 bg-slate-800/50 rounded-2xl border border-slate-700">
-            <a id="dlH" class="bg-emerald-600 hover:bg-emerald-500 p-3 rounded-xl text-center text-sm font-bold">下載 16:9</a>
-            <a id="dlV" class="bg-emerald-600 hover:bg-emerald-500 p-3 rounded-xl text-center text-sm font-bold">下載 9:16</a>
-        </div>
     </div>
+
+    <!-- 原始隱藏影片源 -->
+    <video id="vSource" autoplay playsinline muted></video>
 
     <script>
         const vSource = document.getElementById('vSource');
         const canvasH = document.getElementById('canvasH');
         const canvasV = document.getElementById('canvasV');
-        const ctxH = canvasH.getContext('2d');
-        const ctxV = canvasV.getContext('2d');
+        const ctxH = canvasH.getContext('2d', { alpha: false });
+        const ctxV = canvasV.getContext('2d', { alpha: false });
         
         let recorderH, recorderV;
         let chunksH = [], chunksV = [];
         let isRecording = false;
 
+        // 初始化相機
         async function initCamera() {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({
+                const constraints = {
                     video: { 
                         width: { ideal: 1920 }, 
                         height: { ideal: 1080 },
                         facingMode: "environment" 
                     },
                     audio: true
-                });
-                vSource.srcObject = stream;
-                vSource.onloadedmetadata = () => {
-                    canvasH.width = 1280; canvasH.height = 720;
-                    canvasV.width = 720; canvasV.height = 1280;
-                    drawLoop();
-                    document.getElementById('initBtn').style.display = 'none';
-                    document.getElementById('startBtn').disabled = false;
                 };
-            } catch (e) { alert("相機啟動失敗，請檢查權限或 HTTPS。"); }
+
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                vSource.srcObject = stream;
+                
+                vSource.onloadeddata = () => {
+                    vSource.play();
+                    // 設置畫布原始解析度
+                    canvasH.width = 1280; 
+                    canvasH.height = 720;
+                    canvasV.width = 720; 
+                    canvasV.height = 1280;
+                    
+                    render();
+                    document.getElementById('initBtn').classList.add('hidden');
+                    document.getElementById('recordGroup').classList.remove('hidden');
+                };
+            } catch (e) {
+                alert("啟動失敗：請確保在 HTTPS 環境下並授權相機權限。");
+            }
         }
 
-        function drawLoop() {
-            // 繪製橫式
+        // 核心渲染迴圈
+        function render() {
+            // 1. 繪製橫式 (16:9)
             ctxH.drawImage(vSource, 0, 0, canvasH.width, canvasH.height);
             
-            // 繪製直式 (從橫向源中心裁切)
-            const sourceW = vSource.videoWidth;
-            const sourceH = vSource.videoHeight;
-            const cropW = sourceH * (9/16);
-            const startX = (sourceW - cropW) / 2;
-            ctxV.drawImage(vSource, startX, 0, cropW, sourceH, 0, 0, canvasV.width, canvasV.height);
+            // 2. 繪製直式 (9:16) - 從 16:9 中心裁切
+            const sW = vSource.videoWidth;
+            const sH = vSource.videoHeight;
+            const cropWidth = sH * (9/16);
+            const startX = (sW - cropWidth) / 2;
             
-            requestAnimationFrame(drawLoop);
+            ctxV.drawImage(vSource, startX, 0, cropWidth, sH, 0, 0, canvasV.width, canvasV.height);
+            
+            requestAnimationFrame(render);
         }
 
         document.getElementById('initBtn').onclick = initCamera;
 
+        // 開始錄影
         document.getElementById('startBtn').onclick = () => {
             chunksH = []; chunksV = [];
+            const bitrate = 4000000; // 4Mbps
+            const options = { mimeType: 'video/webm;codecs=vp8,opus', videoBitsPerSecond: bitrate };
             
-            // 設定高品質位元率 (5Mbps)
-            const options = { mimeType: 'video/webm;codecs=vp8,opus', videoBitsPerSecond: 5000000 };
-            
+            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                delete options.mimeType;
+            }
+
             recorderH = new MediaRecorder(canvasH.captureStream(30), options);
             recorderV = new MediaRecorder(canvasV.captureStream(30), options);
             
-            recorderH.ondataavailable = e => chunksH.push(e.data);
-            recorderV.ondataavailable = e => chunksV.push(e.data);
+            recorderH.ondataavailable = e => { if(e.data.size > 0) chunksH.push(e.data); };
+            recorderV.ondataavailable = e => { if(e.data.size > 0) chunksV.push(e.data); };
             
-            recorderH.onstop = () => setupDownload(chunksH, '16-9-video.webm', 'dlH');
-            recorderV.onstop = () => setupDownload(chunksV, '9-16-video.webm', 'dlV');
+            recorderH.onstop = () => setupDownload(chunksH, 'landscape.webm', 'dlH');
+            recorderV.onstop = () => setupDownload(chunksV, 'vertical.webm', 'dlV');
             
-            recorderH.start(); recorderV.start();
+            recorderH.start(); 
+            recorderV.start();
             
             isRecording = true;
             updateUI();
         };
 
+        // 停止錄影
         document.getElementById('stopBtn').onclick = () => {
-            recorderH.stop(); recorderV.stop();
+            recorderH.stop(); 
+            recorderV.stop();
             isRecording = false;
             updateUI();
             document.getElementById('dlSection').classList.remove('hidden');
@@ -154,10 +235,18 @@
         function updateUI() {
             document.getElementById('startBtn').disabled = isRecording;
             document.getElementById('stopBtn').disabled = !isRecording;
-            document.getElementById('boxH').className = isRecording ? 'preview-box rec-active' : 'preview-box';
-            document.getElementById('boxV').className = isRecording ? 'preview-box rec-active mx-auto' : 'preview-box mx-auto';
-            document.getElementById('labelH').innerText = isRecording ? '🔴 錄製中' : '準備就緒';
-            document.getElementById('labelV').innerText = isRecording ? '🔴 錄製中' : '準備就緒';
+            document.getElementById('boxH').classList.toggle('rec-active', isRecording);
+            document.getElementById('boxV').classList.toggle('rec-active', isRecording);
+            document.getElementById('recIndicatorH').classList.toggle('hidden', !isRecording);
+            
+            const btn = document.getElementById('startBtn');
+            if(isRecording) {
+                btn.classList.replace('bg-red-600', 'bg-slate-800');
+                btn.innerHTML = '<span>錄製中...</span>';
+            } else {
+                btn.classList.replace('bg-slate-800', 'bg-red-600');
+                btn.innerHTML = '<span>再次錄影</span>';
+            }
         }
     </script>
 </body>
